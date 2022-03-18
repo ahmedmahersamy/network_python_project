@@ -1,14 +1,16 @@
-#!/usr/bin/python3.10
 
+from functools import cache
 import sys
 import socket
 import pyfiglet
 import re
 import sys
 import smtplib
-import subprocess
-from struct import *
+from email.message import EmailMessage
 
+import subprocess
+import iptc
+from struct import *
 
 #import nmap
 
@@ -97,27 +99,102 @@ def userInput():
     print(f"Scanning Target {ipAddress} {scanType} Ports {minPortNum}-{maxPortNum}")
     
 
-#userInput()
-def unknownport():
+
+
+
+###################################################
+def blocking_ip():
+
+    flush_blocked_ips()
+
     s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     port = 12345
     s.bind(('', port)) 
     print ("socket binded to %s" %(port))
     s.listen(5)    
     print ("socket is listening")  
-    while True:
-        c, addr = s.accept()    
-        print ('Got connection from', addr[0] )
-        subprocess.call(["iptables", "-A", "INPUT", "-s", addr[0], "-j", "DROP"]) #Block IP
-        a= smtplib.SMTP('smtp.gmail.com', 587)
-        a.starttls()
-        a.login("Mohamad.hasan.aziz@gmail.com", "aoaydeewhjxuvrtu")
-        message = "Alert Connection Attempt to unknown port\nIp address : "+addr[0]
-        a.sendmail("Mohamad.hasan.aziz@gmail.com", "mohamadaziz1362@gmail.com", message)
-        a.quit()
-        s.close()
-        break   
-#unknownport()
+    
+    c, addr = s.accept() 
+      
+    print ('Got connection from', addr[0] )
+    chain = iptc.Chain(iptc.Table(iptc.Table.FILTER), "INPUT")
+    rule = iptc.Rule()
+    rule.src = addr[0]
+    rule.target = iptc.Target(rule, "DROP")
+    chain.insert_rule(rule)
+    s.close() 
+    
+    send_email(addr[0])
+
+           
+
+def send_email(ip_add):
+    msg = EmailMessage()
+    msg.set_content('Alert Connection Attempt to unknown port\nIp address : '+ip_add)
+    msg['Subject'] = 'Alert: New Blocked IP From Network\'s Guy'
+    msg['From'] = "networksGuy404@gmail.com"
+    msg['To'] = "networksGuyMonitor@gmail.com"
+
+    server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+    server.login('networksGuy404@gmail.com','vnlmhcjtbdbwbogc')
+    server.send_message(msg)
+    server.quit()
+
+    print_blocked_ips()
+
+    print("Check Your Email For More Details")
+
+
+def print_blocked_ips():
+    table = iptc.Table(iptc.Table.FILTER)
+    for chain in table.chains:
+        if(chain.name == "INPUT"):
+            print ("=======================")
+            print ("Chain ", chain.name)
+            for rule in chain.rules:
+                print ("Rule","proto:", rule.protocol, "src:", rule.src, "dst:", \
+                    rule.dst, "in:", rule.in_interface, "out:", rule.out_interface,)
+                print ("Matches:")
+                for match in rule.matches:
+                    print (match.name)
+                print ("Target:" +rule.target.name)
+    print ("=======================")
+    
+
+# For Testing 
+def flush_blocked_ips():
+    table = iptc.Table(iptc.Table.FILTER)
+    for chain in table.chains:
+        chain.flush()
+        
+    
+
+#################################################################
+
+#userInput()
+# def unknownport():
+#     s = socket.socket()
+#     port = 12345
+#     s.bind(('', port)) 
+#     print ("socket binded to %s" %(port))
+#     s.listen(5)    
+#     print ("socket is listening")  
+#     while True:
+#         c, addr = s.accept()    
+#         print ('Got connection from', addr[0] )
+#         subprocess.call(["iptables", "-A", "INPUT", "-s", addr[0], "-j", "DROP"]) #Block IP
+        
+        
+#         a= smtplib.SMTP('smtp.gmail.com', 587)
+#         a.starttls()
+#         a.login("Mohamad.hasan.aziz@gmail.com", "aoaydeewhjxuvrtu")
+#         message = "Alert Connection Attempt to unknown port\nIp address : "+addr[0]
+#         a.sendmail("Mohamad.hasan.aziz@gmail.com", "mohamadaziz1362@gmail.com", message)
+#         a.quit()
+#         s.close()
+#         break   
+# #unknownport()
 
 def sniffer():
     
@@ -145,14 +222,12 @@ def sniffer():
         else:
             print("Alert IP from outside the subnet detected") 
 
-sniffer()
+#sniffer()
 
+blocking_ip()
     
-    
-
-
-
-
+# table = iptc.Table(iptc.Table.FILTER)
+# table.delete_chain
 
 
 
