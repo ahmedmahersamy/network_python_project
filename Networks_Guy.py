@@ -4,7 +4,13 @@ import sys
 import socket
 import pyfiglet
 import re
-import nmap
+import sys
+import smtplib
+import subprocess
+from struct import *
+
+
+#import nmap
 
 ascii_banner = pyfiglet.figlet_format("Welcome To Network's Guy")
 print(ascii_banner)
@@ -91,8 +97,58 @@ def userInput():
     print(f"Scanning Target {ipAddress} {scanType} Ports {minPortNum}-{maxPortNum}")
     
 
-userInput()   
+#userInput()
+def unknownport():
+    s = socket.socket() 
+    port = 12345     
+    s.bind(('', port)) #binding of socket to port
+    print ("socket binded to %s" %(port))
+    s.listen(5)     # enable up to 5 connections
+    print ("socket is listening")  
+    while True:
+        c, addr = s.accept()    #connection established
+        print ('Got connection from', addr[0] )
+        subprocess.call(["iptables", "-A", "INPUT", "-s", addr[0], "-j", "DROP"]) #Block IP
+        a= smtplib.SMTP('smtp.gmail.com', 587) #connect to SMTP server
+        a.starttls() #Start transport layer security
+        a.login("Mohamad.hasan.aziz@gmail.com", "aoaydeewhjxuvrtu") #login to account using application password (sender_Email, sender_password)
+        message = "Alert Connection Attempt to unknown port\nIp address : "+addr[0]
+        a.sendmail("Mohamad.hasan.aziz@gmail.com", "mohamadaziz1362@gmail.com", message) # send message (sender, reciever,message)
+        a.quit()
+        s.close()
+        break   
+#unknownport()
 
+def sniffer():
+    
+    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+# receive a packet
+    while True:
+        packet = s.recvfrom(65565)  
+        #packet string from tuple
+        packet = packet[0]
+        #take first 20 characters for the ip header
+        ip_header = packet[0:20]
+        iph = unpack('!BBHHHBBH4s4s' , ip_header) # To unpack headers from the packet
+        #version_ihl = iph[0]
+        #version = version_ihl >> 4
+        #ihl = version_ihl & 0xF
+        #iph_length = ihl * 4
+        #ttl = iph[5]
+        #protocol = iph[6]
+        s_addr = socket.inet_ntoa(iph[8]); #Get src ip address from the ip header
+        #d_addr = socket.inet_ntoa(iph[9]);
+        print(s_addr)
+        subnetregex=re.compile(r'(192\.168\.10\.)(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$') #regex to check for subnet
+        if subnetregex.search(s_addr):
+            print("Valid traffic")
+        else:
+            print("Alert IP from outside the subnet detected") 
+
+sniffer()
+
+    
+    
 
 
 
@@ -113,10 +169,10 @@ from socket import *
 def ShowBanner(ports,sock): 
                            try:
                              if ports == "80":
-		                    sock.send("GET HTTP/1.1  \r\n")
-		             else:
-		                sock.send(" \r\n ")
-		                results = sock.recv(4096)	
+                            sock.send("GET HTTP/1.1  \r\n")
+                     else:
+                        sock.send(" \r\n ")
+                        results = sock.recv(4096)   
                                 print "[+] Service: " + str(results) + "\n"
                            except:
                                 print "[+] Service Unavailable!\n"
@@ -128,10 +184,10 @@ def tcpScan(targetIp,targetPort):
                          print "Port Scan Initiated on: " + targetIp + "\n" 
             
                          try: 
-		            sock = socket(AF_INET,SOCK_STREAM)
-		            sock.connect((targetIp,int(targetPort)))
+                    sock = socket(AF_INET,SOCK_STREAM)
+                    sock.connect((targetIp,int(targetPort)))
                             print "[+] TCP Port: " +str(targetPort) + " Open"
-                            ShowBanner(targetPort,sock) 	
+                            ShowBanner(targetPort,sock)     
                           
                          except:
                              print "[+] TCP Port: " +str(targetPort) + " CLOSED\n"
